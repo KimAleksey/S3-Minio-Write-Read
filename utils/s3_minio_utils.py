@@ -1,5 +1,8 @@
 import logging
 import re
+import requests
+
+from time import time
 
 from minio import Minio
 from minio.datatypes import Bucket
@@ -130,20 +133,62 @@ def load_data_to_bucket_via_url(
         bucket_name: str,
         file_name: str,
         url: str,
-        file_pah: str = "./",
-        part_size: int = 1024
-):
+        part_size: int = 50 * 1024 * 1024
+) -> bool:
     """
     Загружает файл по URL в bucket S3.
 
     :param client: Объект Minio.
     :param bucket_name: Имя bucket.
-    :param file_name:
-    :param url:
-    :param file_pah:
-    :param part_size:
-    :return:
+    :param file_name: Имя файла.
+    :param url: Адрес, на котором лежит файл.
+    # :param file_path: Условная папка куда загружать файл. По-умолчанию: ./ - корень бакета.
+    :param part_size: Размер для батча. По-умолчанию 50MB
+    :return: True если файл загружен, иначе False.
     """
+    if not isinstance(client, Minio):
+        raise TypeError("Minio must be an instance of Minio.")
+    if not isinstance(bucket_name, str):
+        raise TypeError("Bucket name must be a string.")
+    if not isinstance(file_name, str):
+        raise TypeError("File name must be a string.")
+    if not isinstance(url, str):
+        raise TypeError("URL must be a string.")
+    if not client.bucket_exists(bucket_name):
+        logging.info("Bucket %s not found.", bucket_name)
+        return False
+
+    # INFO - Начало загрузки
+    start = time()
+    logging.info(f"Start of downloading {file_name}.")
+    logging.info(f"Bucket: {bucket_name}, file name: {file_name}, URL: {url}.")
+
+    try:
+        response = requests.get(url, stream=True, timeout=60)
+    except Exception as e:
+        raise RuntimeError(f"Error while downloading {file_name}.")
+    # Проверка статуса = ОК
+    response.raise_for_status()
+    # Размер файла
+    length = int(response.headers.get("Content-Length", -1))
+    try:
+        client.put_object(
+            bucket_name=bucket_name,
+            object_name=file_name,
+            length=length,
+            data=response.raw,
+            part_size=part_size,
+            content_type=response.headers.get("Content-Type", "application/octet-stream"),
+        )
+    except Exception as e:
+        raise RuntimeError(f"Error while uploading {file_name}.")
+
+    # INFO - Конец загрузки
+    end = time()
+    logging.info(f"Downloaded {file_name} into bucket: {bucket_name}.")
+    logging.info(f"End of downloading {file_name}.")
+    logging.info(f"{file_name} was uploaded in {round((end - start), 2)} seconds.")
+    return True
 
 
 if __name__ == "__main__":
