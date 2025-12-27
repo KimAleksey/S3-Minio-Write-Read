@@ -135,6 +135,11 @@ def load_df_to_postgres(
     # Определяем View
     con.register("input_df", df)
 
+    # Создаем схему
+    con.execute(f"""
+        CREATE SCHEMA IF NOT EXISTS pg.{schema};
+    """)
+
     # Создаем таблицу, если не создана. Загружаем или перегружаем данные.
     con.execute(f"""
         CREATE TABLE IF NOT EXISTS pg.{schema}.{table} 
