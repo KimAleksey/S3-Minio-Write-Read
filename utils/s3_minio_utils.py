@@ -155,7 +155,6 @@ def load_data_to_bucket_via_url(
         raise TypeError("URL must be a string.")
     if not client.bucket_exists(bucket_name):
         logging.info("Bucket %s not found.", bucket_name)
-        return False
 
     # INFO - Начало загрузки
     start = time()
@@ -165,9 +164,14 @@ def load_data_to_bucket_via_url(
     try:
         response = requests.get(url, stream=True, timeout=60)
     except Exception as e:
-        raise RuntimeError(f"Error while downloading {file_path}.")
+        logging.error(f"Error while downloading {file_path}.")
+        return False
+
     # Проверка статуса = ОК
-    response.raise_for_status()
+    if response.status_code != 200:
+        logging.error(f"Error while downloading {file_path}.")
+        return False
+
     # Размер файла
     length = int(response.headers.get("Content-Length", -1))
     try:
@@ -180,7 +184,8 @@ def load_data_to_bucket_via_url(
             content_type=response.headers.get("Content-Type", "application/octet-stream"),
         )
     except Exception as e:
-        raise RuntimeError(f"Error while uploading {file_path}.")
+        logging.error(f"Error while uploading {file_path}.")
+        return False
 
     # INFO - Конец загрузки
     end = time()
@@ -188,7 +193,6 @@ def load_data_to_bucket_via_url(
     logging.info(f"End of downloading {file_path}.")
     logging.info(f"{file_path} was uploaded in {round((end - start), 2)} seconds.")
     return True
-
 
 def get_data_from_bucket(
         client: Minio,
