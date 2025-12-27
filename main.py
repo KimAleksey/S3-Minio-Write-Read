@@ -27,7 +27,7 @@ def main():
     # 2. Загружаем данные из S3
     for file in files_loaded:
         df = extract_parquet_from_s3(BUCKET_NAME, file)
-        df = transform_df(df)
+        df = transform_df(df, file)
         load_df_to_postgres(
             table="nyc_taxi_data_2025",
             df=df,
