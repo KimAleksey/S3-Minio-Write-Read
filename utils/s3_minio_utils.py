@@ -131,7 +131,7 @@ def remove_bucket(client: Minio, name: str) -> bool:
 def load_data_to_bucket_via_url(
         client: Minio,
         bucket_name: str,
-        file_name: str,
+        file_path: str,
         url: str,
         part_size: int = 50 * 1024 * 1024
 ) -> bool:
@@ -140,7 +140,7 @@ def load_data_to_bucket_via_url(
 
     :param client: Объект Minio.
     :param bucket_name: Имя bucket.
-    :param file_name: Имя файла.
+    :param file_path: Путь файла. Или просто имя файла
     :param url: Адрес, на котором лежит файл.
     # :param file_path: Условная папка куда загружать файл. По-умолчанию: ./ - корень бакета.
     :param part_size: Размер для батча. По-умолчанию 50MB
@@ -150,7 +150,7 @@ def load_data_to_bucket_via_url(
         raise TypeError("Minio must be an instance of Minio.")
     if not isinstance(bucket_name, str):
         raise TypeError("Bucket name must be a string.")
-    if not isinstance(file_name, str):
+    if not isinstance(file_path, str):
         raise TypeError("File name must be a string.")
     if not isinstance(url, str):
         raise TypeError("URL must be a string.")
@@ -160,13 +160,13 @@ def load_data_to_bucket_via_url(
 
     # INFO - Начало загрузки
     start = time()
-    logging.info(f"Start of downloading {file_name}.")
-    logging.info(f"Bucket: {bucket_name}, file name: {file_name}, URL: {url}.")
+    logging.info(f"Start of downloading {file_path}.")
+    logging.info(f"Bucket: {bucket_name}, file name: {file_path}, URL: {url}.")
 
     try:
         response = requests.get(url, stream=True, timeout=60)
     except Exception as e:
-        raise RuntimeError(f"Error while downloading {file_name}.")
+        raise RuntimeError(f"Error while downloading {file_path}.")
     # Проверка статуса = ОК
     response.raise_for_status()
     # Размер файла
@@ -174,30 +174,38 @@ def load_data_to_bucket_via_url(
     try:
         client.put_object(
             bucket_name=bucket_name,
-            object_name=file_name,
+            object_name=file_path,
             length=length,
             data=response.raw,
             part_size=part_size,
             content_type=response.headers.get("Content-Type", "application/octet-stream"),
         )
     except Exception as e:
-        raise RuntimeError(f"Error while uploading {file_name}.")
+        raise RuntimeError(f"Error while uploading {file_path}.")
 
     # INFO - Конец загрузки
     end = time()
-    logging.info(f"Downloaded {file_name} into bucket: {bucket_name}.")
-    logging.info(f"End of downloading {file_name}.")
-    logging.info(f"{file_name} was uploaded in {round((end - start), 2)} seconds.")
+    logging.info(f"Downloaded {file_path} into bucket: {bucket_name}.")
+    logging.info(f"End of downloading {file_path}.")
+    logging.info(f"{file_path} was uploaded in {round((end - start), 2)} seconds.")
     return True
+
 
 
 if __name__ == "__main__":
     print(MINIO_CREDS)
     client = get_minio_client()
     create_bucket(client, "nyc-taxi-data")
+    # remove_bucket(client, "nyc-taxi-data")
     bucket_list = get_bucket_list(client)
-    print(bucket_list)
-    remove_bucket(client, "nyc-taxi-data")
-    bucket_list = get_bucket_list(client)
-    print(bucket_list)
 
+    for i in range(1, 12):
+        filename = f"yellow_tripdata_2025-{i:02}.parquet"
+        filepath = f"2025/{i:02}/" + filename
+        url = f"https://d37ci6vzurychx.cloudfront.net/trip-data/{filename}"
+        load_data_to_bucket_via_url(
+            client,
+            "nyc-taxi-data",
+            filepath,
+            url,
+        )
