@@ -9,6 +9,7 @@ from minio.datatypes import Bucket
 
 from utils.creds_utils import get_minio_creds
 
+from typing import Any
 
 # Конфигурация логирования
 logging.basicConfig(
@@ -18,7 +19,6 @@ logging.basicConfig(
 
 # Параметры подключения
 MINIO_CREDS = get_minio_creds()
-
 
 def is_valid_bucket_name(name: str) -> bool:
     """
@@ -142,7 +142,6 @@ def load_data_to_bucket_via_url(
     :param bucket_name: Имя bucket.
     :param file_path: Путь файла. Или просто имя файла
     :param url: Адрес, на котором лежит файл.
-    # :param file_path: Условная папка куда загружать файл. По-умолчанию: ./ - корень бакета.
     :param part_size: Размер для батча. По-умолчанию 50MB
     :return: True если файл загружен, иначе False.
     """
@@ -191,21 +190,36 @@ def load_data_to_bucket_via_url(
     return True
 
 
+def get_data_from_bucket(
+        client: Minio,
+        bucket_name: str,
+        file_path: str,
+) -> Any:
+    """
+    Получаем файл по URL в bucket S3.
+
+    :param client: Объект Minio.
+    :param bucket_name: Имя bucket.
+    :param file_path: Путь файла. Или просто имя файла
+    :return: True если файл загружен, иначе False.
+    """
+    if not isinstance(client, Minio):
+        raise TypeError("Minio must be an instance of Minio.")
+    if not isinstance(bucket_name, str):
+        raise TypeError("Bucket name must be a string.")
+    if not isinstance(file_path, str):
+        raise TypeError("File name must be a string.")
+    if not client.bucket_exists(bucket_name):
+        logging.info("Bucket %s not found.", bucket_name)
+        return False
+
+    try:
+        file = client.get_object(bucket_name, file_path).data
+    except Exception as e:
+        raise RuntimeError(f"Error while getting {file_path}.")
+    logging.info(f"Успешно получены данные файла: {file_path}.")
+    return file
+
 
 if __name__ == "__main__":
     print(MINIO_CREDS)
-    client = get_minio_client()
-    create_bucket(client, "nyc-taxi-data")
-    # remove_bucket(client, "nyc-taxi-data")
-    bucket_list = get_bucket_list(client)
-
-    for i in range(1, 12):
-        filename = f"yellow_tripdata_2025-{i:02}.parquet"
-        filepath = f"2025/{i:02}/" + filename
-        url = f"https://d37ci6vzurychx.cloudfront.net/trip-data/{filename}"
-        load_data_to_bucket_via_url(
-            client,
-            "nyc-taxi-data",
-            filepath,
-            url,
-        )
